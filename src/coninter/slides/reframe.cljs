@@ -376,29 +376,19 @@
 
 (defsrc chain-example
   (rf/reg-event-db :randos/populate
-                   (fn [db [_ & randos]]
-                     (js/console.log randos)
+                   (fn [db [_ randos]]
                      (assoc db :randos {:values randos :scale [1 2 3]})))
   (rf/reg-event-db :randos/scale (fn [db [_ scale]] (assoc-in db [:randos :scale] scale)))
+  (rf/reg-sub :randos/entity (fn [db _] (:randos db)))
   (rf/reg-sub :randos/values
-              (fn [db]
-                (js/console.log :randos/values (-> db :randos :values))
-                (-> db :randos :values)))
-  (defn rando-values [] (rf/subscribe [:randos/values]))
-  (rf/reg-sub :randos/nth rando-values
-              (fn [values [_ n]]
-                (js/console.log :randos/nth n)
-                (nth values n)))
-  (rf/reg-sub :randos/length rando-values count)
-  (rf/reg-sub :randos/third-times-length
-              (fn [_] [(rf/subscribe [:randos/nth 2])
-                       (rf/subscribe [:randos/length])])
-              (fn [[third length]] (* third length)))
-  (rf/reg-sub :randos/scale (comp :scale :randos))
+              #(rf/subscribe [:randos/entity])
+              (fn [{:keys [values]} _] values))
+  (rf/reg-sub :randos/scale
+              #(rf/subscribe [:randos/entity])
+              (fn [{:keys [scale]}] scale))
   (rf/reg-sub :randos/scale-matrix
-              (fn [_] [(rando-values) (rf/subscribe [:randos/scale])])
+              (fn [_] [(rf/subscribe [:randos/values]) (rf/subscribe [:randos/scale])])
               (fn [[values scales]]
-                (js/console.log :randos/scale-matrix)
                 (map (fn [scale] (map #(* scale %) values)) scales)))
   (rf/reg-sub :randos/scale-matrix-markup #(rf/subscribe [:randos/scale-matrix])
               (fn [matrix]
@@ -407,17 +397,11 @@
                      (map (partial into [:tr]))
                      (into [:tbody])
                      (conj [:table]))))
-  (defn seed-randos [js-event]
-    (js/console.log :seeding-randos-clicked)
-    (->> (rand-int 10)
-         (range)
-         (mapv (fn [_] (rand-int 10)))
-         (into [:randos/populate])
-         rf/dispatch))
+  (defn some-randos []
+    (->> (rand-int 7) (+ 3) (range) (map (fn [_] (rand-int 10)))))
   (defn rando-details []
     [:ul
-     [:li "Values are: " (str/join ", " @(rf/subscribe [:randos/values]))]
-     [:li "Third value times length is: " @(rf/subscribe [:randos/third-times-length])]])
+     [:li "Values are: " (str/join ", " @(rf/subscribe [:randos/values]))]])
   (defn rando-scale []
     [:ul
      [:li "The scale is: " (str/join ", " @(rf/subscribe [:randos/scale]))]
@@ -429,10 +413,12 @@
           [#{2 3 5 7 11 13 17 19} "Prime"]]))
   (defn rando-main []
     [:div [rando-details] [rando-scale]
-     [:div [:button.mr2 {:on-click seed-randos} "Make Randos"]
+     [:div [:button.mr2 {:on-click #(rf/dispatch [:randos/populate (some-randos)])}
+            "Make Randos"]
       (doall
         (for [[svals label] scale-buttons]
-          [:button.mr2 {:key label :on-click #(rf/dispatch [:randos/scale svals])}
+          [:button.mr2 {:key label
+                        :on-click #(rf/dispatch [:randos/scale svals])}
            "scale: " label]))]]))
 
 (defn subscription-chains []
@@ -443,5 +429,9 @@
     [:p.mt1 "Circling back to the query portion of our cycle, if you have a lot"
      " of different subscriptions, it can get expensive to call each of them"
      " every time any part of the app-state map changes. "]
+    [:p.mt1 "This example is a bit convoluted, but it demonstrates chained subscriptions."]
     [code/code-file :clojure "subscrpition chain example" chain-example]
-    [rando-main]]])
+    [rando-main]
+    [:p.mt3 "For the 3-arity form of " [w/inline-code "reg-sub"] ", the function"
+     " setting up the subscriptions " [:strong "must"] " return either a"
+     " subscription or a vector of them."]]])
