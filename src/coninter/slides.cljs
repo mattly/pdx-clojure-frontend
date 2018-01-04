@@ -65,8 +65,10 @@
  :nav/go
  (fn [{:keys [db]} [_ modfn]]
    (let [next-slide-number (modfn (:slide/number db))]
-     {:db (assoc db :slide/number next-slide-number)
-      :set-hash next-slide-number})))
+     (when (and (< next-slide-number (count slides))
+                (< -1 next-slide-number))
+       {:db (assoc db :slide/number next-slide-number)
+        :set-hash next-slide-number}))))
 
 (defn forward-arrow-keys [dispatch-v]
   (fn [event]

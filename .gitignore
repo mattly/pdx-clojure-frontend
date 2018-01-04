@@ -1,0 +1,6 @@
+target/*
+node_modules/*
+figwheel_server.log
+package.json
+resources/public/js/main.js
+resources/public/js/out/*
