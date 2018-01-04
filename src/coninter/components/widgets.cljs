@@ -26,3 +26,5 @@
 
 (defn inline-code [c]
   [:code.dark-blue.f6 c])
+
+(def td (ele :td #{:bb :b--light-gray :p1}))

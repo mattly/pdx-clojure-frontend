@@ -5,7 +5,7 @@
    [clojure.string :as str]))
 
 (defn print-src [forms]
-  (binding [pprint/*print-right-margin* 60]
+  (binding [pprint/*print-right-margin* 70]
    (->> forms
         (map #(with-out-str (pprint %)))
         (map #(str/replace % #"clojure.core/" ""))

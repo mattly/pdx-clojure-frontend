@@ -2,6 +2,7 @@
   (:require-macros
    [coninter.components.code :refer [defsrc]])
   (:require
+   [clojure.string :as str]
    [coninter.components.code :as code]
    [coninter.components.widgets :as w]
    [re-frame.core :as rf]
@@ -201,6 +202,12 @@
          (when (= :complete @*state)
            [code/clojure-code @(rf/subscribe [:ajax/result])])]))))
 
+(defn fx-ex [& src]
+  (->> src
+      (map (fn [s] [code/clojure-code s]))
+      (into [:div.bb.b--light-gray.pv1])))
+(defn fx-notes [n] [:div.pv1.mb3 n])
+
 (defn dispatch-events-with-fx []
   [:div
    [w/card-white
@@ -227,7 +234,22 @@
     [:p.mt1 "Managing callback chains can be a bit difficult at times. This is"
      " a pattern I've arrived at for doing ajax calls:"]
     [code/code-file :clojure "ajax callback pattern" ajax-src]
-    [ajaxy]]])
+    [ajaxy]]
+   [w/card-white
+    [:p.mt1 "re-frame includes a bunch of built-in effect handlers:"]
+    [fx-ex '{:db {:initialized? true}}]
+    [fx-notes "Resets app-state map with a new (or modified) value"]
+    [fx-ex '{:dispatch [:paperclip/make]}]
+    [fx-notes "dispatches a single event, expects a single vector"]
+    [fx-ex '{:dispatch-n [[:paperclip/reset]
+                          [:paperclip/make]]}]
+    [fx-notes "dispatches multiple events, in order"]
+    [fx-ex '{:dispatch-later [{:ms 100 :dispatch [:paperclip/make]}
+                              {:ms 200 :dispatch [:paperclip/make]}]}]
+    [fx-notes "dispatches one or more events after a specified delay"]
+    [fx-ex '{:deregister-event-handler :paperclip/reset}
+           '{:deregister-event-handler [:paperclip/make :paperclip/reset]}]
+    [fx-notes "You can dynamically register event handlers, and this is how you get rid of them"]]])
 
 (defsrc cofx-setup
   (rf/reg-cofx
@@ -304,8 +326,122 @@
      window-size-src]
     [window-size]]])
 
+(defsrc debug-example
+  (rf/reg-event-db
+   :paperclips/reset
+   [rf/debug]
+   (fn [db _]
+     (assoc db :paperclips/count 0)))
+  (defn reset-clips []
+    [:div
+     [:div.dib.mr2 "Paperclips: " @(rf/subscribe [:paperclips/count])]
+     [:button.mr2 {:on-click #(rf/dispatch [:paperclip/make])} "Make!"]
+     [:button {:on-click #(rf/dispatch [:paperclips/reset])} "Start Over"]]))
+
+(defsrc interceptor-example
+  (defn simple-dispatcher [input interceptors]
+    (as-> input $
+      (reduce (fn [x {:keys [before]}] (before x)) $ (filter :before interceptors))
+      (reduce (fn [x {:keys [after]}] (after x)) $ (filter :after (reverse interceptors)))))
+  (comment (simple-dispatcher x [j i h g f])))
+
+(defn interceptors []
+  [:div
+   [w/card-white
+    [:p.mt1
+     "Ultimately, effects and coeffects in re-frame follow the "
+     [:strong "interceptor"] " pattern. An interceptor is a wrapper around"
+     " something else. Think middleware, but instead of each item calling"
+     " the next item in the stack directly, interceptors are a collection"
+     " that is reduced by an outside dispatcher."]
+    [code/clojure-code-file "middleware composition" '(f (g (h (i (j x)))))]
+    [code/code-file :clojure "interceptor composition" interceptor-example]
+    [:p.mt1 "As a lisper, of course you already understand the power of data as code."
+     " But if you don't, handling dispatch this way allows each interceptor"
+     " function to focus solely on what it needs to do, and worry about leaving"
+     " the invocation of the rest of the chain up to code that can worry solely"
+     " about that."]
+    [:p.mt1 "Ultimately, " [w/inline-code "reg-event-db"] " is sugar around"
+     " using an interceptor to hoist the " [w/inline-code ":db"] " key out"
+     " of the context of the event handler, so you don't have to worry about"
+     " irrelevant things."]
+    [:p.mt1 "Building your own interceptor is beyond the scope of this talk,"
+     " and in two years of working with re-frame I have yet to justly need to"
+     " create my own."
+     " re-frame does include a few by default, and by far and away the most"
+     " useful of these is " [w/inline-code "debug"] ":"]
+    [code/code-file :clojure "Demo use of debug - open console"
+     debug-example]
+    [reset-clips]]])
+
+(defsrc chain-example
+  (rf/reg-event-db :randos/populate
+                   (fn [db [_ & randos]]
+                     (js/console.log randos)
+                     (assoc db :randos {:values randos :scale [1 2 3]})))
+  (rf/reg-event-db :randos/scale (fn [db [_ scale]] (assoc-in db [:randos :scale] scale)))
+  (rf/reg-sub :randos/values
+              (fn [db]
+                (js/console.log :randos/values (-> db :randos :values))
+                (-> db :randos :values)))
+  (defn rando-values [] (rf/subscribe [:randos/values]))
+  (rf/reg-sub :randos/nth rando-values
+              (fn [values [_ n]]
+                (js/console.log :randos/nth n)
+                (nth values n)))
+  (rf/reg-sub :randos/length rando-values count)
+  (rf/reg-sub :randos/third-times-length
+              (fn [_] [(rf/subscribe [:randos/nth 2])
+                       (rf/subscribe [:randos/length])])
+              (fn [[third length]] (* third length)))
+  (rf/reg-sub :randos/scale (comp :scale :randos))
+  (rf/reg-sub :randos/scale-matrix
+              (fn [_] [(rando-values) (rf/subscribe [:randos/scale])])
+              (fn [[values scales]]
+                (js/console.log :randos/scale-matrix)
+                (map (fn [scale] (map #(* scale %) values)) scales)))
+  (rf/reg-sub :randos/scale-matrix-markup #(rf/subscribe [:randos/scale-matrix])
+              (fn [matrix]
+                (->> matrix
+                     (map (partial map (partial conj [:td])))
+                     (map (partial into [:tr]))
+                     (into [:tbody])
+                     (conj [:table]))))
+  (defn seed-randos [js-event]
+    (js/console.log :seeding-randos-clicked)
+    (->> (rand-int 10)
+         (range)
+         (mapv (fn [_] (rand-int 10)))
+         (into [:randos/populate])
+         rf/dispatch))
+  (defn rando-details []
+    [:ul
+     [:li "Values are: " (str/join ", " @(rf/subscribe [:randos/values]))]
+     [:li "Third value times length is: " @(rf/subscribe [:randos/third-times-length])]])
+  (defn rando-scale []
+    [:ul
+     [:li "The scale is: " (str/join ", " @(rf/subscribe [:randos/scale]))]
+     [:li @(rf/subscribe [:randos/scale-matrix-markup])]])
+  (def scale-buttons
+    (map (fn [[ffn label]] [(->> (range) (filter ffn) (take 5)) label])
+         [[odd? "Odds"] [even? "Even"]
+          [#{0 1 2 3 5 8 13 21 34} "Fibonacci"]
+          [#{2 3 5 7 11 13 17 19} "Prime"]]))
+  (defn rando-main []
+    [:div [rando-details] [rando-scale]
+     [:div [:button.mr2 {:on-click seed-randos} "Make Randos"]
+      (doall
+        (for [[svals label] scale-buttons]
+          [:button.mr2 {:key label :on-click #(rf/dispatch [:randos/scale svals])}
+           "scale: " label]))]]))
 
 (defn subscription-chains []
   [:div
    [w/card-white
-    [w/slide-head "Subscriptions Subscribing to Subscriptions"]]])
+    [w/slide-head "Derived Values, Flowing"]
+    [w/section-head "Or, Subscriptions Subscribing to Subscriptions"]
+    [:p.mt1 "Circling back to the query portion of our cycle, if you have a lot"
+     " of different subscriptions, it can get expensive to call each of them"
+     " every time any part of the app-state map changes. "]
+    [code/code-file :clojure "subscrpition chain example" chain-example]
+    [rando-main]]])

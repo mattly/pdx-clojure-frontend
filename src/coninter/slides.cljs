@@ -40,6 +40,7 @@
    coninter.slides.reframe/subscriptions-simple
    coninter.slides.reframe/dispatch-events-with-fx
    coninter.slides.reframe/pull-outside-state-with-cofx
+   coninter.slides.reframe/interceptors
    coninter.slides.reframe/subscription-chains
    coninter.slides.suggestions/main])
 
