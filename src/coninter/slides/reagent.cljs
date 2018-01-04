@@ -1,7 +1,8 @@
 (ns coninter.slides.reagent
   (:require-macros
-   [coninter.components.code :refer [defn-with-src defexample example]])
+   [coninter.components.code :refer [defn-with-src defexample example defsrc]])
   (:require
+   [cljsjs.react-color]
    [coninter.components.code :as code]
    [coninter.components.widgets :as w]
    [reagent.core :as r]))
@@ -268,7 +269,40 @@
      "elsewhere. Use them sparingly."]
     [code/code-file :clojure "components/code.cljs" code/pretty-code-src]]])
 
+(defsrc cljsjs-example
+  (comment (require '[cljsjs.react-color])
+    "note the lack of :as")
+  (def swatch-picker (r/adapt-react-class js/ReactColor.SwatchesPicker))
+  (defn color-info [*info]
+    [:div.mt3]
+    (if-let [info @*info]
+      [:p "You chose: " (.-hex info)]
+      [:p "Choose a color."]))
+  (defn color-swatches [picker-component]
+    (let [*mycolor (r/atom nil)]
+      (fn []
+        [:div
+         [swatch-picker {:on-change (fn [color event] (reset! *mycolor color))}]
+         [color-info *mycolor]]))))
+
 (defn community []
   [:div
    [w/card-white
-    [w/slide-head "Adapting Community Components"]]])
+    [w/slide-head "Adapting Community Components"]
+    [:p.mt3 "React has a vibrant community and there are a lot of components"
+     " available out there, both via "
+     [w/link "http://cljsjs.github.io/" "cljsjs"]
+     " and " [w/link "https://npmjs.org" "npm"] ". Let's look at how to use"
+     " components from either."]
+    [:p.mt4 "cljsjs has a lot of pre-adapted javascript libraries. The advantage"
+     " is that they're already optimized for the closure compiler. The disadvantage"
+     " is that it's not often obvious how to use them."]
+    [code/clojure-code-file "in project.clj's :dependencies" '[cljsjs/react-color "2.13.1-0"]]
+    [code/code-file :clojure "cljsjs example" cljsjs-example]
+    [color-swatches]
+    [:p.mt1 "since cljsjs modules are loaded into the js/ namespace, and many"
+     " libraries' documentation these days assumes an ES201*-style import"
+     " statement. I had to poke around at the JavaScript console before finding"
+     " " [w/inline-code "ReactColor"] " as the entry-point."]
+    [:p.mt4 "I wanted to show off using a community component via npm, but"
+     " I couldn't actually get it working."]]])

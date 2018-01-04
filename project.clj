@@ -8,8 +8,8 @@
                  [reagent "0.8.0-alpha2"] ;; includes a recent stable version of react
                  [re-frame "0.10.2"]
 
-                 [com.andrewmcveigh/cljs-time "0.5.2"]]
-
+                 [com.andrewmcveigh/cljs-time "0.5.2"]
+                 [cljsjs/react-color "2.13.1-0"]]
 
   :plugins [[lein-cljsbuild "1.1.7" :exclusions [org.clojure/clojure]]
             [lein-figwheel "0.5.14"]]
@@ -36,7 +36,8 @@
       :preloads [devtools.preload]
 
       ;; will load modules from Node Problem Manager
-      :npm-deps {}}
+      :npm-deps {}
+      :install-deps true}
 
      ;; injects figwheel loader into JS build
      :figwheel {:on-jsload "coninter.core/reload"}}}}

@@ -10,9 +10,6 @@
    [re-frame.core :as rf]
    [reagent.core :as reagent]))
 
-(defn slide-link [slide link-title]
-  (w/link "#" link-title))
-
 (defn intro-slide []
   [:div
    [w/card-white
@@ -20,10 +17,9 @@
     [:h2.mv0.f2.lh-solid "with re-frame"]
     [:p "by " (w/link "https://lyonheart.us" "Matthew Lyon") ". "]
     [:p "These slides are at "
-     (w/self-link "https://github.com/mattly/pdx-clojure-constructing-interfaces")
+     (w/self-link "https://github.com/mattly/pdx-clojure-frontend")
      "."]
-    [:p ""]
-    [:ul [:li (slide-link coninter.slides.cljs/main "ClojureScript")]]]])
+    [:p ""]]])
 
 (def slides
   [intro-slide
@@ -44,20 +40,53 @@
    coninter.slides.reframe/subscription-chains
    coninter.slides.suggestions/main])
 
-(rf/reg-event-db ::init (fn [db _] (merge db {:slide :intro})))
+(rf/reg-cofx :location/hash
+             (fn [c] (assoc c :hash js/window.location.hash)))
 
-(rf/reg-sub ::current-slide (fn [db _] (:slide db)))
+(rf/reg-event-fx
+ ::init
+ [(rf/inject-cofx :location/hash)]
+ (fn [{:keys [db hash]} _]
+   (let [hash-no (js/parseInt (re-find #"\d+" hash))
+         new-db (merge {:slide/number hash-no} db)]
+     {:db new-db
+      :set-hash (:slide/number new-db)})))
 
+(rf/reg-sub ::current-slide
+            (fn [db _]
+              (when-let [n (:slide/number db)]
+                (nth slides n))))
+
+(rf/reg-fx :set-hash
+           (fn [num]
+             (js/history.pushState nil "" (str "#" num))))
+
+(rf/reg-event-fx
+ :nav/go
+ (fn [{:keys [db]} [_ modfn]]
+   (let [next-slide-number (modfn (:slide/number db))]
+     {:db (assoc db :slide/number next-slide-number)
+      :set-hash next-slide-number})))
+
+(defn forward-arrow-keys [dispatch-v]
+  (fn [event]
+    (when-let [dir (get {"ArrowLeft" dec "ArrowRight" inc} event.code)]
+      (.preventDefault event)
+      (rf/dispatch (conj dispatch-v dir)))))
 
 (defn presentation []
-  (reagent/create-class
-   {:component-will-mount #(rf/dispatch [::init])
-    :reagent-render
-    (fn []
-      (->> slides
-           (map vector)
-           (interpose [:hr])
-           (into [:div.ma4]))
-      #_[slide @(rf/subscribe [::current-slide])])}))
+  (let [listener (forward-arrow-keys [:nav/go])]
+    (reagent/create-class
+     {:component-will-mount
+      (fn [_]
+        (js/window.addEventListener "keydown" listener)
+        (rf/dispatch [::init]))
+      :component-will-unmount
+      (fn [_] (js/window.removeEventListener "keydown" listener))
+      :reagent-render
+      (fn []
+        [:div.ma4
+         (when-let [slide @(rf/subscribe [::current-slide])]
+           [slide])])})))
 
 ; (def highlight (reagent/adapt-react-class js/Highlight))
