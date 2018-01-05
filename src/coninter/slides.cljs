@@ -25,6 +25,10 @@
   [intro-slide
    coninter.slides.cljs/main
    coninter.slides.cljs/compilers
+   coninter.slides.cljs/hot-reloading-repl
+   coninter.slides.cljs/main-differences
+   coninter.slides.cljs/js-libs
+   coninter.slides.cljs/cljc
    coninter.slides.front-end/main
    coninter.slides.reagent/main
    coninter.slides.reagent/hiccup
